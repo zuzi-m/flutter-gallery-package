@@ -13,28 +13,50 @@ class GalleryImage extends StatefulWidget {
   final List<String> imageUrls;
   final String? titleGallery;
   final int numOfShowImages;
-  final bool showTitleImage;
-  final double? titleImageWidth;
-  final double? titleImageHeight;
+  final int crossAxisCount;
+  final double mainAxisSpacing;
+  final double crossAxisSpacing;
+  final double childAspectRatio;
+  final EdgeInsetsGeometry padding;
+  final Color? colorOfNumberWidget;
+  final Color galleryBackgroundColor;
+  final TextStyle? textStyleOfNumberWidget;
+  final Widget? loadingWidget;
+  final Widget? errorWidget;
+  final double minScale;
+  final double maxScale;
+  final double imageRadius;
+  final bool reverse;
+  final bool showListInGalley;
+  final bool showAppBar;
+  final bool closeWhenSwipeUp;
+  final bool closeWhenSwipeDown;
 
-  final double gridHorizontalSpacing;
-  final double gridVerticalSpacing;
-  final int gridColumns;
-  final BorderRadius thumbnailBorderRadius;
-
-  const GalleryImage(
-      {Key? key,
-      required this.imageUrls,
-      this.titleGallery,
-      this.numOfShowImages = 3,
-      this.showTitleImage = false,
-      this.titleImageWidth,
-      this.titleImageHeight,
-      this.gridHorizontalSpacing = 5,
-      this.gridVerticalSpacing = 5,
-      this.gridColumns = 3,
-      this.thumbnailBorderRadius = const BorderRadius.all(Radius.circular(8))})
-      : super(key: key);
+  const GalleryImage({
+    Key? key,
+    required this.imageUrls,
+    this.titleGallery,
+    this.childAspectRatio = 1,
+    this.crossAxisCount = 3,
+    this.mainAxisSpacing = 5,
+    this.crossAxisSpacing = 5,
+    this.numOfShowImages = 3,
+    this.colorOfNumberWidget,
+    this.textStyleOfNumberWidget,
+    this.padding = EdgeInsets.zero,
+    this.loadingWidget,
+    this.errorWidget,
+    this.galleryBackgroundColor = Colors.black,
+    this.minScale = .5,
+    this.maxScale = 10,
+    this.imageRadius = 8,
+    this.reverse = false,
+    this.showListInGalley = true,
+    this.showAppBar = true,
+    this.closeWhenSwipeUp = false,
+    this.closeWhenSwipeDown = false,
+  })  : assert(numOfShowImages <= imageUrls.length),
+        super(key: key);
   @override
   State<GalleryImage> createState() => _GalleryImageState();
 }
@@ -44,7 +66,7 @@ class _GalleryImageState extends State<GalleryImage> {
 
   @override
   void initState() {
-    buildItemsList(widget.imageUrls);
+    _buildItemsList(widget.imageUrls);
     super.initState();
   }
 
@@ -58,70 +80,41 @@ class _GalleryImageState extends State<GalleryImage> {
 
   @override
   Widget build(BuildContext context) {
-    int galleryItemsWithoutTitleImage = widget.showTitleImage
-      ? galleryItems.length - 1
-      : galleryItems.length;
-    int galleryIndexOffset = widget.showTitleImage ? 1 : 0;
-
-    return Padding(
-        padding: const EdgeInsets.all(10),
-        child: galleryItems.isEmpty
-            ? getEmptyWidget()
-            : Column(
-          children: [
-            if (widget.showTitleImage) Container(
-              //width: widget.titleImageWidth,
-              height: widget.titleImageHeight,
-              padding: EdgeInsets.only(bottom: widget.gridVerticalSpacing),
-              child: ClipRRect(
-                borderRadius: widget.thumbnailBorderRadius,
-                child: GalleryItemThumbnail(
-                  galleryItem: galleryItems[0],
-                  onTap: () {
-                    openImageFullScreen(0);
-                  },
-                ),
-              ),
+    return galleryItems.isEmpty
+        ? const EmptyWidget()
+        : GridView.builder(
+            primary: false,
+            itemCount: galleryItems.length > 3
+                ? widget.numOfShowImages
+                : galleryItems.length,
+            padding: widget.padding,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              childAspectRatio: widget.childAspectRatio,
+              crossAxisCount: widget.crossAxisCount,
+              mainAxisSpacing: widget.mainAxisSpacing,
+              crossAxisSpacing: widget.crossAxisSpacing,
             ),
-            if (galleryItemsWithoutTitleImage > 0) GridView.builder(
-                primary: false,
-                itemCount: min(
-                  galleryItemsWithoutTitleImage,
-                  widget.numOfShowImages
-                ),
-                padding: const EdgeInsets.all(0),
-                semanticChildCount: 1,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: widget.gridColumns,
-                  mainAxisSpacing: widget.gridVerticalSpacing,
-                  crossAxisSpacing: widget.gridHorizontalSpacing,
-                ),
-                shrinkWrap: true,
-                itemBuilder: (BuildContext context, int index) {
-                  int finalIndex = index + galleryIndexOffset;
-                  return ClipRRect(
-                      borderRadius: widget.thumbnailBorderRadius,
-                      // if have less than 4 image w build GalleryItemThumbnail
-                      // if have mor than 4 build image number 3 with number for other images
-                      child: finalIndex < galleryItems.length - 1 &&
-                          index == widget.numOfShowImages - 1
-                          ? buildImageNumbers(finalIndex)
-                          : GalleryItemThumbnail(
-                        galleryItem: galleryItems[finalIndex],
-                        onTap: () {
-                          openImageFullScreen(finalIndex);
-                        },
-                      ));
-                })
-          ],
-        ));
+            shrinkWrap: true,
+            itemBuilder: (BuildContext context, int index) {
+              return _isLastItem(index)
+                  ? _buildImageNumbers(index)
+                  : GalleryItemThumbnail(
+                      galleryItem: galleryItems[index],
+                      onTap: () {
+                        _openImageFullScreen(index);
+                      },
+                      loadingWidget: widget.loadingWidget,
+                      errorWidget: widget.errorWidget,
+                      radius: widget.imageRadius,
+                    );
+            });
   }
 
 // build image with number for other images
-  Widget buildImageNumbers(int index) {
+  Widget _buildImageNumbers(int index) {
     return GestureDetector(
       onTap: () {
-        openImageFullScreen(index);
+        _openImageFullScreen(index);
       },
       child: Stack(
         alignment: AlignmentDirectional.center,
@@ -129,13 +122,21 @@ class _GalleryImageState extends State<GalleryImage> {
         children: <Widget>[
           GalleryItemThumbnail(
             galleryItem: galleryItems[index],
+            loadingWidget: widget.loadingWidget,
+            errorWidget: widget.errorWidget,
+            onTap: null,
+            radius: widget.imageRadius,
           ),
-          Container(
-            color: Colors.black.withOpacity(.7),
-            child: Center(
-              child: Text(
-                "+${galleryItems.length - index}",
-                style: const TextStyle(color: Colors.white, fontSize: 40),
+          ClipRRect(
+            borderRadius: BorderRadius.all(Radius.circular(widget.imageRadius)),
+            child: ColoredBox(
+              color: widget.colorOfNumberWidget ?? Colors.black.withOpacity(.7),
+              child: Center(
+                child: Text(
+                  "+${galleryItems.length - index}",
+                  style: widget.textStyleOfNumberWidget ??
+                      const TextStyle(color: Colors.white, fontSize: 40),
+                ),
               ),
             ),
           ),
@@ -144,30 +145,43 @@ class _GalleryImageState extends State<GalleryImage> {
     );
   }
 
+// Check if item is last image in grid to view image or number
+  bool _isLastItem(int index) {
+    return index < galleryItems.length - 1 &&
+        index == widget.numOfShowImages - 1;
+  }
+
 // to open gallery image in full screen
-  void openImageFullScreen(final int indexOfImage) {
-    Navigator.push(
+  Future<void> _openImageFullScreen(int indexOfImage) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => GalleryImageViewWrapper(
           titleGallery: widget.titleGallery,
           galleryItems: galleryItems,
-          backgroundDecoration: const BoxDecoration(
-            color: Colors.black,
-          ),
+          backgroundColor: widget.galleryBackgroundColor,
           initialIndex: indexOfImage,
-          scrollDirection: Axis.horizontal,
+          loadingWidget: widget.loadingWidget,
+          errorWidget: widget.errorWidget,
+          maxScale: widget.maxScale,
+          minScale: widget.minScale,
+          reverse: widget.reverse,
+          showListInGalley: widget.showListInGalley,
+          showAppBar: widget.showAppBar,
+          closeWhenSwipeUp: widget.closeWhenSwipeUp,
+          closeWhenSwipeDown: widget.closeWhenSwipeDown,
+          radius: widget.imageRadius,
         ),
       ),
     );
   }
 
 // clear and build list
-  buildItemsList(List<String> items) {
+  void _buildItemsList(List<String> items) {
     galleryItems.clear();
     for (var item in items) {
       galleryItems.add(
-        GalleryItemModel(id: item, imageUrl: item),
+        GalleryItemModel(id: item, imageUrl: item, index: items.indexOf(item)),
       );
     }
   }
